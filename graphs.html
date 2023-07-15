@@ -9,9 +9,12 @@
 
         #viz {
             width: 100%;
-            height: 100vh;
+            height: calc(100vh - 130px);
             border: 1px solid lightgray;
             font: 22pt arial;
+        }
+		#cypher {
+            width: 100%;
         }
 
     </style>
@@ -35,29 +38,85 @@
 		function draw() {
 			var config = {
 				containerId: "viz",
+				visConfig: {
+					physics: {
+						"barnesHut": {
+						"gravitationalConstant": -36000,
+						"centralGravity": 0,
+						"springLength": 500,
+						"springConstant": 0.05,
+						"damping": 0.87,
+						"avoidOverlap": 0.5
+						},
+						"minVelocity": 0.75
+					},
+					"edges": {
+						"smooth": {
+						"type": "continuous",
+						"forceDirection": "none",
+						"roundness": 0
+						},
+						arrows: {
+							to: {enabled: true}
+						},
+					},
+				},
 				neo4j: {
 					serverUrl: "bolt://localhost:7687",
-					serverUser: "scraper",
-					serverPassword: "Por-Favor-No-Me-Hackees-Es-Para-La-Facultad-2"
+					serverUser: "user",
+					serverPassword: "password"
 				},
 				labels: {
 					Artist: {
 						label: "name",
-						value: "pagerank",
-						group: "artistas_valor_no_real"
+						color: "color"
 					},
 					Movement: {
+						[NeoVis.NEOVIS_ADVANCED_CONFIG]: {
+							static: {
+								shape: "box"
+							}
+						},
 						label: "name",
-						value: "pagerank",
-						group: "name"
+						color: "color",
 					}
 				},
 				relationships: {
-					INTERACTS: {
-						value: "weight"
-					}
+					"IS_IN": {
+						[NeoVis.NEOVIS_ADVANCED_CONFIG]: {
+							static: {
+								label: "IS_IN",
+							}
+						}
+					},
+					"IS_STUDENT_OF": {
+						[NeoVis.NEOVIS_ADVANCED_CONFIG]: {
+							static: {
+								label: "IS_STUDENT_OF",
+							}
+						}
+					},
+					"IS_TEACHER_OF": {
+						[NeoVis.NEOVIS_ADVANCED_CONFIG]: {
+							static: {
+								label: "IS_TEACHER_OF",
+							}
+						}
+					},
+					"INFLUENCED_BY": {
+						[NeoVis.NEOVIS_ADVANCED_CONFIG]: {
+							static: {
+								label: "INFLUENCED_BY",
+							}
+						}
+					},
 				},
-				initialCypher: "MATCH (n :Movement) RETURN n"
+				initialCypher: `
+				MATCH (m:Movement)<-[r1:IS_IN]-(a:Artist {name: "Leonardo da Vinci"})<-[r2:IS_STUDENT_OF|INFLUENCED_BY*]-(a2)
+OPTIONAL MATCH (m2)<-[r3:IS_IN*]-(a2)
+RETURN *
+limit 60
+`
 			};
 
 			viz = new NeoVis.default(config);
@@ -68,17 +127,20 @@
     </script>
 </head>
 <body onload="draw()">
-<div id="viz"></div>
-
-
-Cypher query: <textarea rows="4" cols=50 id="cypher"></textarea><br>
-<input type="submit" value="Submit" id="reload">
-<input type="submit" value="Stabilize" id="stabilize">
-
-
+	Cypher query: <textarea rows="4" cols=50 id="cypher" ></textarea><br>
+	<input type="submit" value="Submit" id="reload">
+	<input type="submit" value="Stop physics" id="stabilize">
+	<input type="submit" value="Enable physics" id="destabilize">
+	<div id="viz"></div>
 </body>
 
 <script>
+	$("#cypher").val(
+`MATCH (m:Movement)<-[r1:IS_IN]-(a:Artist {name: "Leonardo da Vinci"})<-[r2:IS_STUDENT_OF|INFLUENCED_BY*]-(a2)
+OPTIONAL MATCH (m2)<-[r3:IS_IN*]-(a2)
+RETURN *
+limit 60`
+)
 	$("#reload").click(function () {
 		console.log("Entro en reload")
 		var cypher = $("#cypher").val();
@@ -96,8 +158,22 @@ Cypher query: <textarea rows="4" cols=50 id="cypher"></textarea><br>
 	});
 
 	$("#stabilize").click(function () {
-		viz.stabilize();
+		viz.network.setOptions( { physics: false } );
 	})
-
+	$("#destabilize").click(function () {
+		viz.network.setOptions( { physics: {
+					"barnesHut": {
+					"gravitationalConstant": -36000,
+					"centralGravity": 0,
+					"springLength": 500,
+					"springConstant": 0.05,
+					"damping": 0.87,
+					"avoidOverlap": 0.5
+					},
+					"minVelocity": 0.75
+				}
+			} 
+		);
+	})
 </script>
 </html>

@@ -7,13 +7,14 @@ from py2neo import Graph
 from py2neo.data import Node, Relationship, Subgraph
 from tqdm import tqdm
 from datetime import datetime
+import json
 
 query = '''SELECT Distinct ?artist ?getty_union_id ?artistLabel (group_concat( distinct ?birth_place; separator=", ") AS ?countries) ?birth_date ?death_date (group_concat(?movement; separator=", ") AS ?movements)
 WHERE
 {
   ?artist wdt:P245 ?getty_union_id.
   OPTIONAL {?artist wdt:P135 ?movement.
-  ?movement  wdt:P31 wd:Q968159.}
+  ?movement  p:P31/ps:P31/wdt:P279* wd:Q968159.}
   OPTIONAL {?artist wdt:P27 ?birth_place.}
   OPTIONAL {?artist wdt:P569 ?birth_date.}
   OPTIONAL {?artist wdt:P570 ?death_date.}
@@ -30,13 +31,11 @@ WHERE
   SERVICE wikibase:label {bd:serviceParam wikibase:language "en". }
 }'''
 
-query_movements = '''SELECT ?movement ?movementLabel (group_concat(?start_time; separator=", ") AS ?start_dates) (group_concat(?end_time; separator=", ") AS ?end_dates) (group_concat(?anterior; separator=", ") AS ?previous_movements) (group_concat(?siguiente; separator=", ") AS ?next_movements)
+query_movements = '''SELECT ?movement ?movementLabel (group_concat(?anterior; separator=", ") AS ?previous_movements) (group_concat(?siguiente; separator=", ") AS ?next_movements)
 WHERE
 {
   ?movement p:P31/ps:P31/wdt:P279* wd:Q968159.
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
-  OPTIONAL {?movement wdt:P580 ?start_time}
-  OPTIONAL {?movement wdt:P582 ?end_time}
   OPTIONAL {?movement wdt:P155 ?anterior}
   OPTIONAL {?movement wdt:P156 ?siguiente}
 } group by ?movement ?movementLabel'''
@@ -65,10 +64,21 @@ WHERE
   ?influence wdt:P245 ?influence_id.
 }'''
 
+def color_combiner(colors):
+    splited_colors = map(lambda color: (int(color[1:3], 16), int(color[3:5], 16),  int(color[5:7],16)), colors)
+    r = 0
+    g = 0
+    b = 0
+    for tuple in splited_colors:
+        r += tuple[0]
+        g += tuple[1]
+        b += tuple[2]
+    return '#{:02x}{:02x}{:02x}'.format(r//len(colors), g//len(colors), b//len(colors))
+
 
 class WikiDataQueryResults:
     #A class that can be used to query data from Wikidata using SPARQL and return the results as a Pandas DataFrame or a list of values for a specific key.
-
+    
     def __init__(self):
         #Initializes the WikiDataQueryResults object with a SPARQL query string.
         #:param query: A SPARQL query string.
@@ -136,22 +146,29 @@ class WikiDataQueryResults:
         #:return: None.
 
         dburl='bolt://localhost:7687/artists'
-        user="scraper"
-        pasw="Por-Favor-No-Me-Hackees-Es-Para-La-Facultad-2"
+        user="user"
+        pasw="password"
 
         graph = Graph(dburl, auth=(user, pasw))
 
         movements_df = self.load_as_dataframe(self.sparql_movements)
 
+        f_palette = open('palette.json')
+
+        movements_palette = json.load(f_palette)
+
+        dict_mov_color = {}
+
         print("Loading movements")
         nodes = []
         for index, row in tqdm(movements_df.iterrows(), total=movements_df.shape[0]):
+            dict_mov_color[row['movement']] = movements_palette[index]
+ 
             node = Node(
                 'Movement',
                 name=row['movementLabel'],
                 wd_id=row['movement'],
-                start_dates=row['start_dates'].split(", "),
-                end_dates=row['end_dates'].split(", "),
+                color=movements_palette[index]
             )
             nodes.append(node)
             graph.create(node)
@@ -163,13 +180,13 @@ class WikiDataQueryResults:
             for prev_mov in previous_movements:
                 if movements_df.index[movements_df['movement'] == prev_mov].any():
                     index = movements_df.index[movements_df['movement'] == prev_mov][0]
-                    graph.create(Relationship(nodes[index], "next_movement", row["node"]))
+                    graph.create(Relationship(nodes[index], "NEXT_MOVEMENT", row["node"]))
             
             next_movements = row['next_movements'].split(", ") if row['next_movements'] else []
             for next_mov in next_movements:
                 if movements_df.index[movements_df['movement'] == next_mov].any():
                     index = movements_df.index[movements_df['movement'] == next_mov][0]
-                    graph.create(Relationship(row["node"], "next_movement", nodes[index]))            
+                    graph.create(Relationship(row["node"], "NEXT_MOVEMENT", nodes[index]))            
 
         countries_df = self.load_as_dataframe(self.sparql_countries)
         dict_countries = {}
@@ -190,7 +207,17 @@ class WikiDataQueryResults:
                 death_date = datetime.strptime(row["death_date"], "%Y-%m-%dT%H:%M:%SZ") if isinstance(row["death_date"], str) else None
             except ValueError:
                 death_date = None
+            
+            # group_id='-'
+            sorted_movements =  list(set(row['movements'].split(", ")))
+            sorted_movements.sort()
+            colors=[]
+            for mov in sorted_movements:
+                if mov in dict_mov_color:
+                    colors.append(dict_mov_color[mov])
+                    # group_id += f"{mov}-"
 
+            color = color_combiner(colors) if len(colors) > 0 else "#000000"
             node = Node(
                 'Artist',
                 artist=row['artist'],
@@ -198,7 +225,9 @@ class WikiDataQueryResults:
                 name=row["artistLabel"],
                 birth_date=birth_date,
                 death_date=death_date,
-                countries=countries_list if countries_list else ["None"]
+                countries=countries_list if countries_list else ["None"],
+                color=color,
+                # group_id=group_id
             )
             artists_nodes.append(node)
             graph.create(node)

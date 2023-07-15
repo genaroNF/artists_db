@@ -1,0 +1,3 @@
+[submodule "neovis.js"]
+	path = neovis.js
+	url = git@github.com:neo4j-contrib/neovis.js.git
