@@ -1,5 +1,5 @@
 # artists_db
-Script and dump to fill a neo4j database with artists, movements and relationships betweens thems.
+Script and dump file to fill a neo4j database with artists, movements and relationships betweens thems in Neo4j.
 
 # Cloning instructions
 Clone the repository as always but add the option --recursive to clone [Neovis.js](https://github.com/neo4j-contrib/neovis.js?) too
