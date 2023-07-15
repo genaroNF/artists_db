@@ -15,8 +15,8 @@ Clone the repository as always but add the option --recursive to clone [Neovis.j
 2. if there is an error when fetching the artists you will have to clear the database (run the query `MATCH(n) DETACH DELETE n`) and re run the script.
 
 # To use Neovis for visualizations.
-1. build the neovis.js project in here as specified in their github https://github.com/neo4j-contrib/neovis.js?
-2. go inside graphs.html and modify this values
+1. build the neovis.js project in here as specified in their github [Neovis.js](https://github.com/neo4j-contrib/neovis.js?)
+2. go inside graphs.html and modify this values to your user and password for your Neo4j db
 ```
 neo4j: {
     serverUrl: "bolt://localhost:7687",
